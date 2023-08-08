@@ -394,6 +394,30 @@ inline T cfVividLight(T src, T dst) {
 }
 
 template<class T>
+inline T cfCancellationLight(T src, T dst) {
+    using namespace Arithmetic;
+    typedef typename KoColorSpaceMathsTraits<T>::compositetype composite_type;
+    
+    if(src < halfValue<T>()) {
+        if(isUnsafeAsDivisor(src))
+            return (dst == unitValue<T>()) ? unitValue<T>() : zeroValue<T>();
+
+	// min(1,max(0, dst / (2*src))
+    	composite_type src2 = src;
+    	src2 += src2;
+    	return clamp<T>(composite_type(dst) * unitValue<T>() / src2);
+    }
+    
+    if(src == unitValue<T>())
+        return (dst == zeroValue<T>()) ? zeroValue<T>() : unitValue<T>();
+    
+    // min(1,max(0,1-(1-dst) / (2*(1-src))))
+    composite_type srci2 = inv(composite_type(src) + src);
+    composite_type dsti = inv(dst);
+    return clamp<T>(unitValue<T>() - (dsti * unitValue<T>() / srci2));
+}
+
+template<class T>
 inline T cfPinLight(T src, T dst) {
     typedef typename KoColorSpaceMathsTraits<T>::compositetype composite_type;
     // TODO: verify that the formula is correct (the first max would be useless here)
@@ -429,6 +453,15 @@ inline T cfLinearLight(T src, T dst) {
     
     // min(1,max(0,(dst + 2*src)-1))
     return clamp<T>((composite_type(src) + src + dst) - unitValue<T>());
+}
+
+template<class T>
+inline T cfLinearCancellationLight(T src, T dst) {
+    using namespace Arithmetic;
+    typedef typename KoColorSpaceMathsTraits<T>::compositetype composite_type;
+    
+    // min(1,max(0,(dst - 2*src)+1))
+    return clamp<T>((composite_type(dst) - (src + src)) + unitValue<T>());
 }
 
 template<class T>
@@ -545,8 +578,35 @@ inline T cfOver(T src, T dst) { Q_UNUSED(dst); return src; }
 template<class T>
 inline T cfOverlay(T src, T dst) { return cfHardLight(dst, src); }
 
+inline T cfOverlay2(T src, T dst) {
+    using namespace Arithmetic;
+
+    qreal fsrc = scale<qreal>(src);
+    qreal fdst = scale<qreal>(dst);
+    
+    if (fsrc == 1.0) {
+        return scale<T>(1.0);}
+
+    if(fsrc > 0.5) {
+        return scale<T>(mul(2.0 * fsrc, fdst));
+    }
+    return scale<T>(cfDivide(inv(2.0 * fsrc - 1.0), fdst));
+}
+
 template<class T>
 inline T cfMultiply(T src, T dst) { return Arithmetic::mul(src, dst); }
+
+template<class T>
+inline T cfMultiplyAdditive(T src, T dst) {
+    using namespace Arithmetic;
+    return Arithmetic::mul(src, dst) + src;
+}
+
+template<class T>
+inline T cfMultiplyAdditiveSubtractive(T src, T dst) {
+    using namespace Arithmetic;
+    return unitValue<T>() - Arithmetic::mul(unitValue<T>() - dst, src - unitValue<T>()) + src;
+}
 
 template<class T>
 inline T cfHardOverlay(T src, T dst) {
